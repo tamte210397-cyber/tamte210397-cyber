@@ -1,0 +1,373 @@
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ALTOP QR System</title>
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f3f4f6;
+  color: #111827;
+  padding: 16px;
+}
+
+.header {
+  background: #1e293b;
+  color: #fff;
+  padding: 16px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.header h1 { font-size: 18px; }
+
+.badge {
+  display: inline-block;
+  background: #3b82f6;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: bold;
+  margin-top: 8px;
+}
+
+.sub-info {
+  font-size: 12px;
+  color: #cbd5e1;
+  margin-top: 6px;
+  word-break: break-word;
+}
+
+.search-box {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.search-box input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 15px;
+  text-transform: uppercase;
+}
+
+.search-box button {
+  padding: 10px 16px;
+  background: #1e293b;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  cursor: pointer;
+}
+
+.card img {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  display: block;
+  background: #e5e7eb;
+}
+
+.card p {
+  padding: 8px;
+  font-size: 12px;
+  text-align: center;
+  color: #4b5563;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.empty {
+  text-align: center;
+  color: #6b7280;
+  padding: 32px 16px;
+  background: #fff;
+  border-radius: 8px;
+  margin-top: 12px;
+}
+
+.status {
+  text-align: center;
+  color: #6b7280;
+  font-size: 13px;
+  margin: 12px 0;
+}
+
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 999;
+  inset: 0;
+  background: rgba(0,0,0,0.92);
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+}
+
+.modal.open { display: flex; }
+
+.modal img {
+  max-width: 100%;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.close-btn {
+  position: fixed;
+  top: 16px;
+  right: 20px;
+  color: white;
+  font-size: 32px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="header">
+  <h1>ALTOP QR SYSTEM</h1>
+  <div class="badge" id="code-title">CHƯA CHỌN MÃ</div>
+  <div class="sub-info" id="sub-info"></div>
+</div>
+
+<div class="search-box">
+  <input type="text" id="code-input" placeholder="VD: LOAN01 hoặc LOAN01-LOAN04">
+  <button id="search-btn">Xem</button>
+</div>
+
+<div class="status" id="status"></div>
+<div class="gallery" id="gallery"></div>
+<div class="empty" id="empty-msg" style="display:none">
+  Không tìm thấy hình ảnh nào cho mã này.
+</div>
+
+<div class="modal" id="modal">
+  <span class="close-btn" id="close-btn">&times;</span>
+  <img id="modal-img" src="" alt="Phóng to">
+</div>
+
+<script>
+(() => {
+  const params = new URLSearchParams(location.search);
+  const rawQuery = (params.get("id") || "").trim().toUpperCase();
+
+  const gallery = document.getElementById("gallery");
+  const emptyMsg = document.getElementById("empty-msg");
+  const codeTitle = document.getElementById("code-title");
+  const subInfo = document.getElementById("sub-info");
+  const codeInput = document.getElementById("code-input");
+  const status = document.getElementById("status");
+  const modal = document.getElementById("modal");
+  const modalImg = document.getElementById("modal-img");
+
+  function normalizeInput(str) {
+    return str.replace(/[\u2010-\u2015\u2212]/g, "-");
+  }
+
+  // Nhận mã đơn hoặc dải mã, ví dụ LOAN01-LOAN04
+  function expandCodes(input) {
+    if (!input) return [];
+
+    const result = [];
+    const parts = normalizeInput(input)
+      .split(",")
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    const rangeRegex = /^([A-Z]+)(\d+)-([A-Z]+)(\d+)$/;
+
+    for (const part of parts) {
+      const match = part.match(rangeRegex);
+
+      if (match && match[1] === match[3]) {
+        const start = Number(match[2]);
+        const end = Number(match[4]);
+        const pad = match[2].length;
+
+        if (start <= end && end - start <= 100) {
+          for (let n = start; n <= end; n++) {
+            result.push(match[1] + String(n).padStart(pad, "0"));
+          }
+          continue;
+        }
+      }
+
+      result.push(part);
+    }
+
+    return [...new Set(result)];
+  }
+
+  // Chỉ thử các tên ảnh có khả năng tồn tại
+  // Mỗi mã tối đa 21 đường dẫn thay vì hàng trăm đường dẫn
+  function buildCandidates(code) {
+    const paths = [];
+
+    // Ảnh trực tiếp theo mã
+    paths.push(`${code}.JPG`);
+    paths.push(`${code}.jpg`);
+    paths.push(`${code}.JPEG`);
+    paths.push(`${code}.jpeg`);
+    paths.push(`${code}.PNG`);
+    paths.push(`${code}.png`);
+
+    // Ảnh đánh số trong thư mục images/MÃ/
+    for (let i = 1; i <= 5; i++) {
+      paths.push(`images/${code}/${i}.JPG`);
+      paths.push(`images/${code}/${i}.jpg`);
+    }
+
+    // Ảnh phụ theo mã
+    for (let i = 1; i <= 5; i++) {
+      paths.push(`${code}-${i}.JPG`);
+      paths.push(`${code}-${i}.jpg`);
+    }
+
+    return [...new Set(paths)];
+  }
+
+  function openModal(src) {
+    modalImg.src = src;
+    modal.classList.add("open");
+  }
+
+  function closeModal() {
+    modal.classList.remove("open");
+    modalImg.src = "";
+  }
+
+  document.getElementById("close-btn").addEventListener("click", closeModal);
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeModal();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeModal();
+  });
+
+  function goToCode() {
+    const val = normalizeInput(codeInput.value.trim().toUpperCase());
+    if (val) {
+      location.href = "?id=" + encodeURIComponent(val);
+    }
+  }
+
+  document.getElementById("search-btn").addEventListener("click", goToCode);
+
+  codeInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") goToCode();
+  });
+
+  async function loadImage(path) {
+    return new Promise(resolve => {
+      const img = new Image();
+
+      img.onload = () => resolve(path);
+      img.onerror = () => resolve(null);
+
+      // Không thêm timestamp để trình duyệt có thể sử dụng cache
+      img.src = path;
+    });
+  }
+
+  async function loadCode(code) {
+    const candidates = buildCandidates(code);
+
+    // Từng mã sẽ được kiểm tra theo thứ tự,
+    // tránh tạo hàng loạt request cùng lúc
+    for (const path of candidates) {
+      const result = await loadImage(path);
+
+      if (result) {
+        addImage(result);
+      }
+    }
+  }
+
+  function addImage(path) {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const img = document.createElement("img");
+    img.src = path;
+    img.alt = path;
+    img.loading = "lazy";
+
+    const label = document.createElement("p");
+    label.textContent = path;
+
+    card.appendChild(img);
+    card.appendChild(label);
+
+    card.addEventListener("click", () => openModal(path));
+
+    gallery.appendChild(card);
+  }
+
+  async function init() {
+    const codes = expandCodes(rawQuery);
+
+    if (!codes.length) {
+      emptyMsg.textContent =
+        "Vui lòng quét QR hoặc nhập mã vào ô tìm kiếm phía trên.";
+      emptyMsg.style.display = "block";
+      return;
+    }
+
+    codeTitle.textContent = "MÃ QUẢN LÝ: " + normalizeInput(rawQuery);
+    subInfo.textContent = "Danh sách mã: " + codes.join(", ");
+    codeInput.value = normalizeInput(rawQuery);
+
+    status.textContent = "Đang tải hình ảnh...";
+    let totalLoaded = 0;
+
+    for (const code of codes) {
+      const before = gallery.children.length;
+      await loadCode(code);
+      totalLoaded += gallery.children.length - before;
+    }
+
+    status.textContent = totalLoaded
+      ? `Đã tải ${totalLoaded} hình ảnh`
+      : "Không có hình ảnh phù hợp";
+
+    if (!totalLoaded) {
+      emptyMsg.style.display = "block";
+    }
+  }
+
+  init();
+})();
+</script>
+
+</body>
+</html>
